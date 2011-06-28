@@ -2,9 +2,9 @@
 
 $ScriptDir =  Split-Path -Parent $myinvocation.mycommand.path
 
-$SoftwareDir = "$ScriptDir/Software"
-$EISODir = "$ScriptDir/ExplodedISOs"
-$EMSIDir = "$ScriptDir/ExplodedMSIs"
+$SoftwareDir = "$ScriptDir/../Software"
+$EISODir = "$ScriptDir/../Exploded/ISOs"
+$EMSIDir = "$ScriptDir/../Exploded/Installers"
 
 $SETUPDIR = "C:\Setup"
 $TEMPDIR = $env:TEMP
@@ -19,21 +19,17 @@ function Install-Git
 
 function Install-Mercurial($bits="32")
 {
-	$installdir = "$SETUPDIR\Mercurial"
+	$targetfolder = "Mercurial"
 	$Pfilesdir = "Mercurial"
-	CreateNewDirectory $installdir
+
 	if ($bits -eq "64") {
 		$msidir = "Mercurial-1.8.4-x64"
-		cp "$EMSIDir\$msidir\PFiles\$PFilesDir" "$installdir" -recurse
 	}
 	else {
 		$msidir = "Mercurial-1.8.4-x86"
-		cp "$EMSIDir\$msidir\PFiles\$PFilesDir" "$installdir" -recurse
 	}
-	
-	$installdirstr = "$installdir" -replace "\\","\\"
-	
-	Get-MachinePathItems | Remove-PathItems -regex "$installdirstr" | Add-PathItems -New "$installdir" | Set-MachinePathItems	
+
+	SimpleXCopyInstall "$EMSIDIR\$msidir\PFiles\$Pfilesdir" $targetfolder
 }
 
 function Install-Terminals
@@ -150,7 +146,6 @@ function Install-OfficeProfessional($licensekey, $username = "TW", $userinitials
 
 	$OfficeLiteConfig | Out-File "$TEMPDIR\OfficeLiteConfig.xml"
 	& "$EISODIR\en_office_professional_plus_2010_x86_x64_dvd_515529\Setup.exe" /config $CONFIGFILE
-	
 }
 
 Function Install-Wireshark([string]$bits = "32")
@@ -172,9 +167,49 @@ Function Install-WinPCap
 	iex "$installfilename"
 }
 
+Function Install-CollabnetSVN
+{
+	SimpleXCopyInstall "$EMSIDIR/CollabnetSVN/`$INSTDIR" "CollabnetSVN"
+}
+
+Function Install-Scala
+{
+	$installerdir = "$SOFTWAREDIR\Scala"
+	$zipfilename = Get-UniqueFileName $installerdir -pattern "Scala*.zip"
+	$zipfilename -match ".*\\(.*)\.zip"
+	$subfoldertocopy = $matches[1]
+
+	SimpleUnzipInstall "$zipfilename" "Scala" "$subfoldertocopy"
+}
 
 #################################### UTILITY FUNCTIONS ##################################
 set-alias sz 7za
+
+Function SimpleUnzipInstall($zipfile, $targetfolder, $subfoldertocopy )
+{
+	$unzipfolder = "$TEMPDIR\$targetfolder"
+	UnzipFiles "$zipfile" "$TEMPDIR\$targetfolder" -Clean
+	
+	if ($subfoldertocopy) { 
+		$srcfolder = "$unzipfolder\$subfoldertocopy"
+	}
+	else {
+		$srcfolder = "$unzipfolder"
+	}
+	
+	SimpleXCopyInstall $srcfolder $targetfolder
+}
+
+Function SimpleXCopyInstall($srcdir, $targetfolder)
+{
+	$installdir = "$SETUPDIR\$targetfolder"
+	CreateNewDirectory $installdir
+	cp "$srcdir\*" "$installdir" -recurse
+	
+	$installdirstr = "$installdir" -replace "\\","\\"
+	
+	Get-MachinePathItems | Remove-PathItems -regex "$installdirstr" | Add-PathItems -New "$installdir" | Set-MachinePathItems	
+}
 
 Function CreateNewDirectory($createpath)
 {
