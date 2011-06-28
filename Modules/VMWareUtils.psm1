@@ -38,3 +38,11 @@ Function Create-Environment($envconfstr)
 		}
 	}
 }
+
+Function Delete-Environment($envname)
+{
+    $envconffile = "{0}\$envname.conf" -f $script:CONF
+	[xml] $env = Get-Content $envconffile
+	
+	Remove-Folder -Folder $env.Environment.name -DeletePermanently
+}
