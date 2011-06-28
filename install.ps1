@@ -1,3 +1,5 @@
+# Copyright : Apache License 2.0
+
 $ScriptDir =  Split-Path -Parent $myinvocation.mycommand.path
 
 $SoftwareDir = "$ScriptDir/Software"
