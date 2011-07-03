@@ -2,9 +2,9 @@
 
 $ScriptDir =  Split-Path -Parent $myinvocation.mycommand.path
 
-$SoftwareDir = "$ScriptDir/../Software"
-$EISODir = "$ScriptDir/../Exploded/ISOs"
-$EMSIDir = "$ScriptDir/../Exploded/Installers"
+$SoftwareDir = "$ScriptDir/../../Software"
+$EISODir = "$ScriptDir/../../Exploded/ISOs"
+$EMSIDir = "$ScriptDir/../../Exploded/Installers"
 
 $SETUPDIR = "C:\Setup"
 $TEMPDIR = $env:TEMP
@@ -179,13 +179,92 @@ Function Install-Scala
 	$zipfilename -match ".*\\(.*)\.zip"
 	$subfoldertocopy = $matches[1]
 
-	SimpleUnzipInstall "$zipfilename" "Scala" "$subfoldertocopy"
+	SimpleUnzipInstall "$zipfilename" "Scala" "$subfoldertocopy" "bin"
+}
+
+Function Install-SqlServer2005SP3($bits = "32")
+{
+	if ($bits -eq "64") {
+		$suffix = "x64"
+	}
+	else {
+		$suffix = "x86"
+	}	
+	
+	& "$SoftwareDir\Microsoft SQL Server 2005 SP3\SQLServer2005SP3-KB955706-$suffix-ENU.exe" '/quiet' '/allinstances' | Out-Null
+}
+
+Function Install-SqlServer2005($instancename, $ACCOUNT, $PASSWORD, $SAPWD, [switch] $Server, [switch] $Client, [switch] $NotificationServices, $bits = "32")
+{
+	$Features = @()
+	# Server is included
+	if ($Server) {
+		$Features += "SQL_Engine"  
+	}
+	
+	if ($Client) {
+		$Features += "Client_Components","Connectivity","SQL_Tools90"
+	}
+	
+	if ($NotificationServices) {
+		$Features += "Notification_Services","NS_Engine","NS_Client"
+	}
+	
+	$AddLocal = [string]::join(",", $Features)
+	
+	Write-Host "Installing SQL Server 2005 Features $AddLocal"
+
+	if ($bits -eq "64") {
+		$suffix = "x64"
+	}
+	else {
+		$suffix = "x86"
+	}	
+	
+	Write-Host "Suffix is $suffix"	
+	
+	& "$EISODIR\SQL_2005_dev_all_dvd\SQL Server $suffix\Servers\Setup.exe" '/qb' `
+	"INSTANCENAME=$instancename" `
+	"ADDLOCAL=$AddLocal" `
+	"REMOVE=SQL_FullText"  `
+	"SECURITYMODE=SQL" `
+	"DISABLENETWORKPROTOCOLS=0" `
+	"SAPWD=$SAPWD" `
+	"SQLBROWSERACCOUNT=$ACCOUNT" `
+	"SQLBROWSERPASSWORD=$PASSWORD" `
+	"SQLASACCOUNT=$ACCOUNT" `
+	"SQLASPASSWORD=$PASSWORD" `
+	"SQLACCOUNT=$ACCOUNT" `
+	"SQLPASSWORD=$PASSWORD" `
+	"AGTACCOUNT=$ACCOUNT" `
+	"AGTPASSWORD=$PASSWORD" | Out-Null
+	
+	Install-SqlServer2005SP3 $bits | Out-Null
+}
+
+Function Install-BiztalkConfig ($SQLServer, $servicecred, $EntSSOBackupSecretPwd)
+{
+	$insecurecred = $servicecred.GetNetworkCredentials()
+	$params = @{
+		HOSTNAME = (hostname)
+		SQLSERVER = $SqlServer;
+		DOMAIN = $insecurecred.Domain;
+		USERNAME = $insecurecred.UserName;
+		PASSWORD = $insecurecred.Password;
+		ENTSSOBACKUPSECRETPWD = $EntSSOBackupSecretPwd
+	}
+	
+	$biztemplatefile = "$ScriptDir\biztalktemplate.xml"
+	$bizconfigfile = "$TEMPDIR\biztalkconfig.xml"
+	
+	Get-Content $biztemplatefile | Replace-Template -params $params | Out-File $bizconfigfile
 }
 
 #################################### UTILITY FUNCTIONS ##################################
 set-alias sz 7za
 
-Function SimpleUnzipInstall($zipfile, $targetfolder, $subfoldertocopy )
+
+Function SimpleUnzipInstall($zipfile, $targetfolder, $subfoldertocopy, $foldertoaddtopath )
 {
 	$unzipfolder = "$TEMPDIR\$targetfolder"
 	UnzipFiles "$zipfile" "$TEMPDIR\$targetfolder" -Clean
@@ -197,10 +276,10 @@ Function SimpleUnzipInstall($zipfile, $targetfolder, $subfoldertocopy )
 		$srcfolder = "$unzipfolder"
 	}
 	
-	SimpleXCopyInstall $srcfolder $targetfolder
+	SimpleXCopyInstall $srcfolder $targetfolder $foldertoaddtopath
 }
 
-Function SimpleXCopyInstall($srcdir, $targetfolder)
+Function SimpleXCopyInstall($srcdir, $targetfolder, $foldertoaddtopath)
 {
 	$installdir = "$SETUPDIR\$targetfolder"
 	CreateNewDirectory $installdir
@@ -208,7 +287,14 @@ Function SimpleXCopyInstall($srcdir, $targetfolder)
 	
 	$installdirstr = "$installdir" -replace "\\","\\"
 	
-	Get-MachinePathItems | Remove-PathItems -regex "$installdirstr" | Add-PathItems -New "$installdir" | Set-MachinePathItems	
+	if ($foldertoaddtopath) {
+		$pathdir = "$installdir\$foldertoaddtopath"
+	}
+	else {
+		$pathdir = "$installdir"
+	}
+		
+	Get-MachinePathItems | Remove-PathItems -regex "$installdir" | Add-PathItems -New "$pathdir" | Set-MachinePathItems	
 }
 
 Function CreateNewDirectory($createpath)
@@ -382,4 +468,30 @@ Function Install-MSI($msifilename)
 {
 	Write-Host "Installing from $msifilename"
 	msiexec /qb /i $msifilename
+}
+
+
+Function List-TemplateParams ( $filename )
+{
+	Get-Content $filename | Select-String "%%(.*?)%%" | foreach { $_.Matches[0].Groups[1].Value} | Sort | Get-Unique
+}
+
+Function Replace-Template ( [Parameter(ValueFromPipeline = $true)]$instrs, $params )
+{
+	Process {
+		foreach ($instr in $instrs) {
+			$parts = [regex]::split($instr, '(%%.*?%%)')
+			$cparts = $parts.length
+		
+			for($i = 0; $i -lt $cparts; $i++) {
+				$part = $parts[$i]
+				if ($part -match "^%%(.*)%%$") {
+					$key = $matches[1] 
+					# TBD - ADD WARNING IF KEY NOT PRESENT
+					$parts[$i] = $params[$key]
+				}
+			}
+			$parts -join ""
+		}
+	}
 }
