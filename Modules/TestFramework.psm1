@@ -1,3 +1,10 @@
+<#
+Copyright : Samir K Seth
+License : Apache 2.0
+Source : https://github.com/samirkseth/PSAdmin
+#>
+
+
 # This test cannot be run in a script because it prompts for missing parameter, as expected.
 # Test.GetUsersInLocalGroupReturnsErrorOnNullGroup 
 
