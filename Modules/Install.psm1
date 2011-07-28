@@ -1,4 +1,7 @@
-# Copyright : Apache License 2.0
+<#
+License : Apache 2.0
+Source : https://github.com/samirkseth/PSAdmin
+#>
 
 $ScriptDir =  Split-Path -Parent $myinvocation.mycommand.path
 
