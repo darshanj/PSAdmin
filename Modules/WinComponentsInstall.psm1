@@ -1,3 +1,7 @@
+<#
+License : Apache 2.0
+Source : https://github.com/samirkseth/PSAdmin
+#>
 
 Function SetWindowsSourcePaths($OSPATH)
 {
