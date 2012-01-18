@@ -28,6 +28,19 @@ Function Assert-Throws([string]$regex, [scriptblock] $testblock)
 	}
 }
 
+Function Assert-Does-Not-Throw([scriptblock] $testblock)
+{
+	$ExceptionRaised = $false
+	Write-Verbose "Starting Assert-Does-Not-Throw"
+	try {
+		& $testblock
+	}
+	catch [Exception] {
+		$ExceptionRaised = $true
+		throw ('Expected No Exception but got Exception "{0}"' -f $_.Exception.Message)
+	}
+}
+
 Function Run-Test ($module, [scriptblock] $testscript)
 {
 	$mod = Get-Module $module
